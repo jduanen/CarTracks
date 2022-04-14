@@ -48,6 +48,7 @@ The configuration of this simulator is given by a YAML file, and the list of Car
 
 from dataclasses import dataclass
 from enum import Enum
+import math
 import matplotlib as mpl
 import matplotlib.patches as patches
 from matplotlib.path import Path
@@ -102,47 +103,62 @@ CAR_DEFAULTS = {
 """The Entity object encapsulates all of the state of a (currently 2D) shape within the simulation environment."""
 
 class Entity():
-    def __init__(self, centroid, width, length):
-      if not isinstance(centroid, Coordinate):
-        raise TypeError("centroid must be a Coordinate")
-      self.centroid = centroid
-      if width < 0:
-        raise ValueError("width must be non-negative")
-      self.width = width
-      if length < 0:
-        raise ValueError("length must be non-negative")
-      self.length = length
-      
-      self.x1 = self.centroid.x - (self.width / 2)
-      if self.x1 < 0:
-        raise ValueError("Entity lies outside the simulation space")
-      self.x2 = self.centroid.x + (self.width / 2)
-      self.y1 = self.centroid.y - (self.length / 2)
-      if self.y1 < 0:
-        raise ValueError("Entity lies outside the simulation space")
-      self.y2 = self.centroid.y + (self.length / 2)
+  @staticmethod
+  def rotate(origin, point, degrees):
+      """Rotate a point counterclockwise by a given number of degrees around an origin
 
-    def __repr__(self):
-      return f"Entity: centroid={self.centroid}, width={self.width}, length={self.length}"
+        Inputs:
+          - origin: Coordinate object that ????
+          - point: Coordinate object that ????
+          - angle: float steering angle in degrees from centerline, left is negative, right is positive
+      """
+      angle = radians(degrees)
 
-    def render(self, ax, color="gray"):
-      vertices = [
-                  (self.x1, self.y1), # BL
-                  (self.x1, self.y2), # LT
-                  (self.x2, self.y2), # RT
-                  (self.x2, self.y1),  # RB
-                  (0.0, 0.0)
-      ]
-      codes = [
-               Path.MOVETO,
-               Path.LINETO,
-               Path.LINETO,
-               Path.LINETO,
-               Path.CLOSEPOLY
-      ]
-      path = Path(vertices, codes)
-      patch = patches.PathPatch(path, facecolor=color, lw=2)
-      ax.add_patch(patch)
+      qx = origin.x + math.cos(angle) * (point.x - origin.x) - math.sin(angle) * (point.y - origin.y)
+      qy = origin.y + math.sin(angle) * (point.x - origin.x) + math.cos(angle) * (point.y - origin.y)
+      return qx, qy
+
+  def __init__(self, centroid, width, length):
+    if not isinstance(centroid, Coordinate):
+      raise TypeError("centroid must be a Coordinate")
+    self.centroid = centroid
+    if width < 0:
+      raise ValueError("width must be non-negative")
+    self.width = width
+    if length < 0:
+      raise ValueError("length must be non-negative")
+    self.length = length
+    
+    self.x1 = self.centroid.x - (self.width / 2)
+    if self.x1 < 0:
+      raise ValueError("Entity lies outside the simulation space")
+    self.x2 = self.centroid.x + (self.width / 2)
+    self.y1 = self.centroid.y - (self.length / 2)
+    if self.y1 < 0:
+      raise ValueError("Entity lies outside the simulation space")
+    self.y2 = self.centroid.y + (self.length / 2)
+
+  def __repr__(self):
+    return f"Entity: centroid={self.centroid}, width={self.width}, length={self.length}"
+
+  def render(self, ax, color="gray"):
+    vertices = [
+                (self.x1, self.y1), # BL
+                (self.x1, self.y2), # LT
+                (self.x2, self.y2), # RT
+                (self.x2, self.y1),  # RB
+                (0.0, 0.0)
+    ]
+    codes = [
+             Path.MOVETO,
+             Path.LINETO,
+             Path.LINETO,
+             Path.LINETO,
+             Path.CLOSEPOLY
+    ]
+    path = Path(vertices, codes)
+    patch = patches.PathPatch(path, facecolor=color, lw=2)
+    ax.add_patch(patch)
 
 """The Car object is a subclass of Entity, has more state and the ability to move."""
 
@@ -161,6 +177,11 @@ class Car(Entity):
     self.maxSteeringAngle = kwargs['maxSteeringAngle']
     self.velocity = kwargs['velocity']
     self.azimuth = kwargs['azimuth']
+
+    self.wheelbase = self.length - (self.frontAxleOffset + self.rearAxleOffset)
+    self.trackWidth = self.width
+
+    #### FIXME this assumes initial azmuith=0.0 -- have to do rotational transform on them
     self.lrTire = Coordinate(self.x1, self.y1 + self.rearAxleOffset)
     self.rrTire = Coordinate(self.x2, self.y1 + self.rearAxleOffset)
     self.frontAxleY = self.y2 - self.frontAxleOffset
@@ -171,6 +192,8 @@ class Car(Entity):
     return f"Car: {self.__dict__}"
 
   def render(self, ax):
+    '''Render the car where ever it is now (i.e., after instantiation or the last move)
+    '''
     super().render(ax, color="lightblue")
 
     rearAxle_Tires = [
@@ -186,6 +209,7 @@ class Car(Entity):
     patch = patches.PathPatch(path, color="red", lw=2)
     ax.add_patch(patch)
 
+    #### FIXME rotate front axle about the pivot point by the current steering angle
     frontAxle = [
                 (Path.MOVETO, (self.x1, self.frontAxleY)),
                 (Path.LINETO, (self.x2, self.frontAxleY))
@@ -194,6 +218,17 @@ class Car(Entity):
     path = Path(vertices, codes)
     patch = patches.PathPatch(path, color="green", lw=2)
     ax.add_patch(patch)
+
+    '''
+    turnRadius = ???? if ???? >= self.minTurnRadius else self.minTurnRadius
+    insideSteeringAngle = np.arctan(self.wheelbase / (turnRadius - (self.trackWidth / 2)))
+    outsideSteeringAngle = np.arctan(self.wheelbase / (turnRadius + (self.trackWidth / 2)))
+
+    # draw inside and outside tires
+    '''
+
+    #### FIXME to this point, the car has been rendered assuming azimuth=0
+    ####    now need to rotate all of the components about the centroid
   
   def move(self, motion):
     pass
@@ -215,6 +250,8 @@ class Simulator():
       else:
         entity = Car(**entitySpec)
         self.dynamic[entitySpec['name']] = entity
+      #### FIXME this only works for static objects and cars with azimuth=0
+      ####   could approximate cars with circles of diameter=length or just do bounds on static objects
       self.minX = entity.x1 if entity.x1 < self.minX else self.minX
       self.maxX = entity.x2 if entity.x2 > self.maxX else self.maxX
       self.minY = entity.y1 if entity.y1 < self.minY else self.minY
