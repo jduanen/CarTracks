@@ -164,7 +164,7 @@ class Car(Entity):
     self.lrTire = Coordinate(self.x1, self.y1 + self.rearAxleOffset)
     self.rrTire = Coordinate(self.x2, self.y1 + self.rearAxleOffset)
     self.frontAxleY = self.y2 - self.frontAxleOffset
-    self.frontAxelPivot = Coordinate(centroid.x, self.y2 - self.frontAxleOffset)
+    self.frontAxelPivot = Coordinate(self.centroid.x, self.y2 - self.frontAxleOffset)
     self.rearAxleY = self.y1 + self.rearAxleOffset
 
   def __repr__(self):
